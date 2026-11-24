@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 // HTTP요청을 처리하고 응답 데이터를 반환하는 클래스로 등록
 @RestController
 // 클래스 선언.파일 이름과 일치해야함
-public class HealthContoller {
+public class HealthController {
     // 해당 주소의 GET 요청을 아래 메서드에 연결
     @GetMapping("/api/health")
     // 문자열 키와 값을 담은 Map을 반환하는 메서드
