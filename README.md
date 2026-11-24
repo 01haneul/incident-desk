@@ -27,3 +27,13 @@
 
 - 장애 이벤트 한 건을 HTTP 요청으로 받아 DB에 저장하고,
   생성된 사건을 조회한다. (2026-11-23(월))
+
+
+## 기술 문서
+
+- [요구사항](docs/requirements.md)
+- [API 계약](docs/api.md)
+- [데이터 모델](docs/data-model.md)
+- [검증 기록](docs/verification.md)
+- [트러블슈팅](docs/troubleshooting.md)
+- [보안 설계 및 검증 상태](docs/security.md)
