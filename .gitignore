@@ -17,3 +17,6 @@ bin/
 
 # 로그
 *.log
+
+# VS Code 프로젝트 설정 제외
+.vscode/
