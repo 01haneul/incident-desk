@@ -17,6 +17,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
 
 import io.github.haneul.incidentdesk.common.ApiExceptionHandler;
@@ -98,5 +99,29 @@ class IncidentControllerWebTests {
 
         // 잘못된 번호는 조회 서비스까지 전달되지 않아야 함
         verifyNoInteractions(incidentQueryService);
+    }
+
+    @Test
+    void hidesInternalDetailsWhenUnexpectedErrorOccurs() throws Exception {
+        // 실제 비밀값이 아닌 테스트용 내부 오류 문구로 예외 발생
+        given(incidentQueryService.getDetail(1L))
+                .willThrow(new IllegalStateException(
+                        "TEST_ONLY_INTERNAL_DETAIL"
+                ));
+
+        // 500 응답이 정해진 세 필드와 값으로만 구성되는지 검사
+        // 내부 예외 메시지나 스택 트레이스가 추가되면 실패한다.
+        mockMvc.perform(get("/api/incidents/1"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_JSON
+                ))
+                .andExpect(content().json("""
+                        {
+                          "code": "INTERNAL_ERROR",
+                          "message": "요청 처리 중 오류가 발생했습니다.",
+                          "fieldErrors": []
+                        }
+                        """, JsonCompareMode.STRICT));
     }
 }
