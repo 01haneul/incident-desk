@@ -126,3 +126,29 @@ events와 incidents를 incident_id로 조인해 조회했다.
 이번 기록은 실제 HTTP 요청을 사용한 수동 검증 결과다.
 예상하지 못한 서버 오류의 500 응답과 잘못된 JSON 요청은
 아직 별도로 검증하지 않았다.
+
+## 장애 사건 조회 웹 계층 자동화 테스트
+
+- 검증일: 2026-11-25
+- 테스트 클래스: IncidentControllerWebTests
+- 도구: WebMvcTest, MockMvc, MockitoBean
+
+### 검증 규칙
+
+- 정상 조회 시 200과 계약에 맞는 사건 정보를 반환한다.
+- 사건 없음 예외를 404와 INCIDENT_NOT_FOUND로 변환한다.
+- 0, 음수, 문자, Long 범위 초과 번호는 400으로 거절한다.
+- 잘못된 번호는 조회 서비스에 전달하지 않는다.
+
+### 실행 명령
+
+```powershell
+.\gradlew.bat test --tests "io.github.haneul.incidentdesk.incident.IncidentControllerWebTests"
+```
+
+### 결과와 범위
+
+- tests=6, skipped=0, failures=0, errors=0
+- 판정: 통과
+- 실제 Controller, 입력 검증, 공통 예외 처리기를 검증했다.
+- 조회 서비스는 대역을 사용하므로 실제 DB 조회는 포함하지 않는다.
