@@ -9,7 +9,7 @@
 
 ## 1. 장애 이벤트 접수
 
-POST/api/events
+POST /api/events
 Content-Type : application/json
 
 ### 요청 예시
@@ -36,7 +36,7 @@ Location : /api/incidents/1
     "eventId" : 1,
     "incidentId" : 1,
     "status" : "OPEN",
-    "receiveAt" : "2026-11-23T08:30:00Z"
+    "receivedAt" : "2026-11-23T08:30:00Z"
 }
 
 

@@ -1,4 +1,6 @@
 // 요청 DTO : 전달받을 데이터와 입력 규칙 정의
+// DTO : 요청·응답 데이터를 전달하는 객체 라는 뜻
+// - 엔티티와 분리하면 호출자가 보내도 되는 항목과 서버가 관리할 항목을 구분할 수 있어
 
 package io.github.haneul.incidentdesk.event;
 
