@@ -152,3 +152,29 @@ events와 incidents를 incident_id로 조인해 조회했다.
 - 판정: 통과
 - 실제 Controller, 입력 검증, 공통 예외 처리기를 검증했다.
 - 조회 서비스는 대역을 사용하므로 실제 DB 조회는 포함하지 않는다.
+
+## 이벤트 접수 웹 계층 자동화 테스트
+
+- 검증일: 2026-11-26
+- 테스트 클래스: EventControllerWebTests
+
+### 검증 규칙
+
+- 정상 요청은 201과 접수 결과를 반환한다.
+- Location 헤더에는 이벤트 번호가 아닌 사건 번호를 사용한다.
+- 공백 제목은 400과 title 필드 오류로 거절한다.
+- 깨진 JSON은 400과 공통 오류 응답으로 거절한다.
+- 거절된 요청은 접수 서비스를 호출하지 않는다.
+
+### 실행 명령
+
+```powershell
+.\gradlew.bat test --tests "io.github.haneul.incidentdesk.event.EventControllerWebTests"
+```
+
+### 결과와 범위
+
+- tests=3, skipped=0, failures=0, errors=0
+- 판정: 통과
+- 실제 Controller, 입력 검증, 공통 예외 처리기를 실행했다.
+- 접수 서비스는 대역을 사용하므로 실제 DB 저장은 포함하지 않는다.
