@@ -10,23 +10,21 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-
-// 장애 사건 한 건을 표현하며 incidents 테이블과 연결되는 엔티티.
-// 새 사건의 초기 상태는 OPEN이고, 생성 시각은 UTC 기준으로 전달받는다.
-
-// JPA가 저장·조회할 대상으로 인식
+// 장애 사건을 저장하며 incidentKey로 같은 장애 유형을 구분한다.
+// 새 사건의 상태는 OPEN이고, 생성 시각은 UTC 기준으로 전달받는다.
 @Entity
-// 연결할 DB 테이블 지정
 @Table(name = "incidents")
 public class Incident {
-    // 객체의 식별자이자 DB 기본키
-    @Id 
-    // MySQL의 AUTO_INCREMENT 로 생성한 번호 사용
+
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    // java의 serviceKey를 DB의 service_key에 연결
+
     @Column(name = "service_key", nullable = false, length = 100)
     private String serviceKey;
+
+    @Column(name = "incident_key", length = 100)
+    private String incidentKey;
 
     @Column(nullable = false, length = 200)
     private String title;
@@ -37,19 +35,29 @@ public class Incident {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    // JPA가 사용할 매개변수 없는 생성자
+    // JPA가 조회한 데이터로 객체를 만들 때 사용
     protected Incident() {
     }
 
-    // 새 사건은 호출자가 상태를 지정하지 않고 항상 OPEN으로 생성
+    // 기존 호출 방식 유지: 사건 연결 키가 없는 요청
     public Incident(
             String serviceKey,
             String title,
             LocalDateTime createdAt
     ) {
+        this(serviceKey, title, createdAt, null);
+    }
+
+    // 사건 연결 키를 포함하는 생성 방식
+    public Incident(
+            String serviceKey,
+            String title,
+            LocalDateTime createdAt,
+            String incidentKey
+    ) {
         this.serviceKey = Objects.requireNonNull(serviceKey);
+        this.incidentKey = incidentKey;
         this.title = Objects.requireNonNull(title);
-        // java에서 생성할 때도 초기 상태 보장
         this.status = "OPEN";
         this.createdAt = Objects.requireNonNull(createdAt);
     }
@@ -60,6 +68,10 @@ public class Incident {
 
     public String getServiceKey() {
         return serviceKey;
+    }
+
+    public String getIncidentKey() {
+        return incidentKey;
     }
 
     public String getTitle() {

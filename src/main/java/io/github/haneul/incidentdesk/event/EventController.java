@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 
-// 외부 이벤트 번호를 포함한 접수 요청을 서비스에 전달한다.
-// 새 접수는 201, 기존 접수 재사용은 200으로 응답한다.
+// 사건 연결 키를 포함한 접수 요청을 서비스에 전달한다.
+// 새 사건 생성은 201, 기존 사건 연결과 재전송은 200으로 응답한다.
 @RestController
 public class EventController {
 
@@ -22,27 +22,49 @@ public class EventController {
     }
 
     @PostMapping("/api/events")
-    public ResponseEntity<EventIngestionService.Receipt> create(
+    public ResponseEntity<EventCreateResponse> create(
             @Valid @RequestBody EventCreateRequest request
     ) {
-        EventIngestionService.Result result = eventIngestionService.receive(
-                request.serviceKey(),
-                request.title(),
-                request.externalEventId()
-        );
+        EventIngestionService.Result result;
+
+        if (request.incidentKey() == null) {
+            // 연결 키가 없는 기존 호출 방식 유지
+            result = eventIngestionService.receive(
+                    request.serviceKey(),
+                    request.title(),
+                    request.externalEventId()
+            );
+        } else {
+            result = eventIngestionService.receive(
+                    request.serviceKey(),
+                    request.title(),
+                    request.externalEventId(),
+                    request.incidentKey()
+            );
+        }
 
         EventIngestionService.Receipt receipt = result.receipt();
+
+        EventCreateResponse response = new EventCreateResponse(
+                receipt.eventId(),
+                receipt.incidentId(),
+                receipt.status(),
+                receipt.receivedAt(),
+                result.created(),
+                result.incidentCreated()
+        );
 
         URI location = URI.create(
                 "/api/incidents/" + receipt.incidentId()
         );
 
-        HttpStatus status = result.created()
+        // 상태 코드는 새 사건 생성 여부를 기준으로 결정
+        HttpStatus status = result.incidentCreated()
                 ? HttpStatus.CREATED
                 : HttpStatus.OK;
 
         return ResponseEntity.status(status)
                 .location(location)
-                .body(receipt);
+                .body(response);
     }
 }
