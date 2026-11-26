@@ -1,16 +1,18 @@
 package io.github.haneul.incidentdesk.event;
 
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-// 수신 이벤트의 저장과 조회를 담당하는 리포지토리
-// Spring Data JPA가 실행 시 구현체를 생성한다
-// interface : 사용할 기능의 계약을 정의하는 java 문법
-// extends JpaRepository : Spring Data JPA의 기본 기능을 상속
-// <Incident, Long> : 관리할 엔티티는 Incident, 식별자 타입은 Long
-// <Event, Long> : 관리할 엔티티는 Event, 식별자 타입은 Long
+// 이벤트 저장과 조회를 담당한다.
+// 서비스 식별자와 외부 번호로 기존 접수를 찾을 수 있다.
 public interface EventRepository extends JpaRepository<Event, Long> {
-    
+
+    // 외부 번호가 있는 요청에 사용하며, 연결된 사건도 함께 조회한다.
+    @EntityGraph(attributePaths = "incident")
+    Optional<Event> findByServiceKeyAndExternalEventId(
+            String serviceKey,
+            String externalEventId
+    );
 }
-
-
-// 기본 저장·조회 기능을 JpaRepository 에서 제공함.

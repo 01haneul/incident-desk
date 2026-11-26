@@ -37,3 +37,4 @@
 - [검증 기록](docs/verification.md)
 - [트러블슈팅](docs/troubleshooting.md)
 - [보안 설계 및 검증 상태](docs/security.md)
+- [이벤트 재전송 처리 설계와 검증](docs/idempotency.md)

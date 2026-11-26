@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -22,8 +24,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import io.github.haneul.incidentdesk.common.ApiExceptionHandler;
 
-// 이벤트 접수의 정상 응답, 입력 검증, 잘못된 JSON 처리를 검사한다.
-// 접수 서비스는 대역을 사용하므로 실제 DB 저장은 수행하지 않는다.
+// 접수 API의 신규·재사용·충돌 응답과 입력 오류를 검사한다.
+// 서비스 대역을 사용하므로 실제 DB 중복 처리는 별도로 검증한다.
 @WebMvcTest(EventController.class)
 @Import(ApiExceptionHandler.class)
 class EventControllerWebTests {
@@ -35,22 +37,14 @@ class EventControllerWebTests {
     private EventIngestionService eventIngestionService;
 
     @Test
-    void returns201AndIncidentLocationWhenRequestIsValid() throws Exception {
-        Instant receivedAt = Instant.parse("2026-11-26T00:00:00Z");
-
-        // 두 번호를 다르게 설정해 응답에서 서로 뒤바뀌지 않는지도 검사
-        EventIngestionService.Receipt receipt =
-                new EventIngestionService.Receipt(
-                        10L,
-                        20L,
-                        "OPEN",
-                        receivedAt
-                );
+    void returns201WhenExternalEventIdIsOmitted() throws Exception {
+        EventIngestionService.Receipt receipt = sampleReceipt();
 
         given(eventIngestionService.receive(
                 "payment-api",
-                "Payment approval failed"
-        )).willReturn(receipt);
+                "Payment approval failed",
+                null
+        )).willReturn(new EventIngestionService.Result(receipt, true));
 
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -61,10 +55,7 @@ class EventControllerWebTests {
                                 }
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(header().string(
-                        "Location",
-                        "/api/incidents/20"
-                ))
+                .andExpect(header().string("Location", "/api/incidents/20"))
                 .andExpect(content().contentTypeCompatibleWith(
                         MediaType.APPLICATION_JSON
                 ))
@@ -72,13 +63,82 @@ class EventControllerWebTests {
                 .andExpect(jsonPath("$.incidentId").value(20))
                 .andExpect(jsonPath("$.status").value("OPEN"))
                 .andExpect(jsonPath("$.receivedAt")
-                        .value(receivedAt.toString()));
+                        .value(receipt.receivedAt().toString()));
 
-        // 요청의 두 값이 접수 서비스에 정확히 전달됐는지 검사
         verify(eventIngestionService).receive(
                 "payment-api",
-                "Payment approval failed"
+                "Payment approval failed",
+                null
         );
+    }
+
+    // // 신규 생성과 기존 결과 재사용을 각각 한 건씩 검사한다.
+    @ParameterizedTest(name = "created={0} -> HTTP {1}")
+    @CsvSource({
+            "true, 201",
+            "false, 200"
+    })
+    void returnsExpectedStatusForExternalEvent(
+            boolean created,
+            int expectedStatus
+    ) throws Exception {
+        EventIngestionService.Receipt receipt = sampleReceipt();
+
+        given(eventIngestionService.receive(
+                "payment-api",
+                "Payment approval failed",
+                "evt-001"
+        )).willReturn(new EventIngestionService.Result(receipt, created));
+
+        mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "serviceKey": "payment-api",
+                                  "externalEventId": "evt-001",
+                                  "title": "Payment approval failed"
+                                }
+                                """))
+                .andExpect(status().is(expectedStatus))
+                .andExpect(header().string("Location", "/api/incidents/20"))
+                .andExpect(jsonPath("$.eventId").value(10))
+                .andExpect(jsonPath("$.incidentId").value(20))
+                .andExpect(jsonPath("$.status").value("OPEN"))
+                .andExpect(jsonPath("$.receivedAt")
+                        .value(receipt.receivedAt().toString()));
+
+        verify(eventIngestionService).receive(
+                "payment-api",
+                "Payment approval failed",
+                "evt-001"
+        );
+    }
+
+    @Test
+    void returns409WhenExternalEventIdConflicts() throws Exception {
+        given(eventIngestionService.receive(
+                "payment-api",
+                "Different title",
+                "evt-001"
+        )).willThrow(new EventIdConflictException());
+
+        mockMvc.perform(post("/api/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "serviceKey": "payment-api",
+                                  "externalEventId": "evt-001",
+                                  "title": "Different title"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(content().json("""
+                        {
+                          "code": "EVENT_ID_CONFLICT",
+                          "message": "동일한 외부 이벤트 번호에 다른 내용이 전달됐습니다.",
+                          "fieldErrors": []
+                        }
+                        """, JsonCompareMode.STRICT));
     }
 
     @Test
@@ -105,13 +165,11 @@ class EventControllerWebTests {
                         }
                         """, JsonCompareMode.STRICT));
 
-        // 입력 검증에서 거절되면 접수 서비스는 실행되지 않아야 함
         verifyNoInteractions(eventIngestionService);
     }
 
     @Test
     void rejectsMalformedJsonBeforeCallingService() throws Exception {
-        // 열린 중괄호만 보내 JSON을 해석할 수 없는 상황 재현
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{"))
@@ -125,5 +183,15 @@ class EventControllerWebTests {
                         """, JsonCompareMode.STRICT));
 
         verifyNoInteractions(eventIngestionService);
+    }
+
+    // 실제 DB에 생성하지 않는 테스트용 접수 결과
+    private EventIngestionService.Receipt sampleReceipt() {
+        return new EventIngestionService.Receipt(
+                10L,
+                20L,
+                "OPEN",
+                Instant.parse("2026-11-26T00:00:00Z")
+        );
     }
 }

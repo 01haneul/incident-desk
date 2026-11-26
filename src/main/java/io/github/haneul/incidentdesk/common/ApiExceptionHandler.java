@@ -13,14 +13,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import io.github.haneul.incidentdesk.event.EventIdConflictException;
 import io.github.haneul.incidentdesk.incident.IncidentNotFoundException;
 
 // API 예외를 공통 오류 응답으로 변환한다.
-// Spring MVC의 기본 상태 코드와 헤더를 유지하고, 내부 오류 내용은 숨긴다.
+// 상태 코드와 필요한 헤더를 유지하며 내부 오류 내용은 응답에서 숨긴다.
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
-    // 정상적인 번호지만 해당 사건이 없으면 404로 응답한다.
     @ExceptionHandler(IncidentNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleIncidentNotFound(
             IncidentNotFoundException exception
@@ -34,7 +34,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
-    // 입력 검증, 숫자 변환, 잘못된 JSON 등 Spring MVC 예외의 응답 형식을 통일한다.
+    // 같은 외부 이벤트 번호에 다른 내용이 전달되면 409로 응답
+    @ExceptionHandler(EventIdConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleEventIdConflict(
+            EventIdConflictException exception
+    ) {
+        ApiErrorResponse body = new ApiErrorResponse(
+                "EVENT_ID_CONFLICT",
+                "동일한 외부 이벤트 번호에 다른 내용이 전달됐습니다.",
+                List.of()
+        );
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @Override
     protected @Nullable ResponseEntity<Object> handleExceptionInternal(
             Exception exception,
@@ -45,7 +58,6 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ) {
         List<ApiErrorResponse.FieldErrorDetail> fieldErrors = List.of();
 
-        // 요청 본문의 필드 검증 오류는 필드명과 안내 메시지를 제공한다.
         if (exception instanceof MethodArgumentNotValidException validation) {
             fieldErrors = validation.getBindingResult()
                     .getFieldErrors()
@@ -82,7 +94,6 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         );
     }
 
-    // 별도로 처리하지 않은 예외는 내부 정보를 숨기고 500으로 응답한다.
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnexpected(
             Exception exception

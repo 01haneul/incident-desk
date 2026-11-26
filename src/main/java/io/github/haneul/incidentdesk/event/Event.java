@@ -14,10 +14,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
-
-// 접수 당시의 장애 정보를 보존하며 events 테이블과 연결되는 엔티티.
-// 각 이벤트는 하나의 장애 사건에 속하고, 접수 시각은 UTC 기준으로 전달받는다.
-
+// 접수 당시의 장애 정보를 보존하고 장애 사건에 연결한다.
+// 외부 이벤트 번호는 재전송을 식별하기 위한 선택 값이다.
 @Entity
 @Table(name = "events")
 public class Event {
@@ -26,18 +24,15 @@ public class Event {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 여러 이벤트가 하나의 사건에 연결되며, 사건 자동 저장·삭제는 하지 않는다.
-    // 여러 이벤트가 하나의 사건을 참조하는 관계 지정 
-    // optional = false 사건 연결이 필수라는 JPA 설정
-    // Fetch.LAZY 연결된 사건의 데이터는 필요할 때 조회하도록 지정
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    // DB에서는 사건의 기본키를 incident_id에 저장
     @JoinColumn(name = "incident_id", nullable = false)
-    // 이벤트가 속한 장애 사건을 객체로 표현
     private Incident incident;
 
     @Column(name = "service_key", nullable = false, length = 100)
     private String serviceKey;
+
+    @Column(name = "external_event_id", length = 100)
+    private String externalEventId;
 
     @Column(nullable = false, length = 200)
     private String title;
@@ -45,20 +40,32 @@ public class Event {
     @Column(name = "received_at", nullable = false)
     private LocalDateTime receivedAt;
 
-    // JPA가 DB 조회 결과로 객체를 생성할 때 사용하는 기본 생성자
     protected Event() {
     }
 
+    // 기존 생성 방식 유지: 외부 번호가 없는 이벤트
     public Event(
             Incident incident,
             String serviceKey,
             String title,
             LocalDateTime receivedAt
     ) {
+        this(incident, serviceKey, title, receivedAt, null);
+    }
+
+    // 외부 번호를 포함할 수 있는 생성 방식
+    public Event(
+            Incident incident,
+            String serviceKey,
+            String title,
+            LocalDateTime receivedAt,
+            String externalEventId
+    ) {
         this.incident = Objects.requireNonNull(incident);
         this.serviceKey = Objects.requireNonNull(serviceKey);
         this.title = Objects.requireNonNull(title);
         this.receivedAt = Objects.requireNonNull(receivedAt);
+        this.externalEventId = externalEventId;
     }
 
     public Long getId() {
@@ -71,6 +78,10 @@ public class Event {
 
     public String getServiceKey() {
         return serviceKey;
+    }
+
+    public String getExternalEventId() {
+        return externalEventId;
     }
 
     public String getTitle() {

@@ -1,76 +1,117 @@
 package io.github.haneul.incidentdesk.event;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import io.github.haneul.incidentdesk.incident.Incident;
-import io.github.haneul.incidentdesk.incident.IncidentRepository;
-
-
-// 장애 이벤트를 접수하고 새 장애 사건과 이벤트를 함께 저장한다.
-// 두 저장을 하나의 트랜잭션으로 묶어 부분 저장을 방지한다.
-
-// @Service : Spring이 이 클래스를 서비스 객체로 생성·관리
-// 서비스가 사용할 저장·조회 도구를 Spring에서 전달받음
+// 외부 이벤트 번호로 재전송을 판단하고 접수 결과를 반환한다.
+// 저장은 별도 서비스에 맡겨, 롤백 완료 후 기존 결과를 조회한다.
 @Service
+@Transactional(propagation = Propagation.NEVER)
 public class EventIngestionService {
-    // final : 생성자로 받은 리포지토리 참조를 이후 재할당 하지 않음
-    private final IncidentRepository incidentRepository;
+
+    private final EventCreationService eventCreationService;
     private final EventRepository eventRepository;
 
-    // Spring이 생성한 리포지토리를 생성자로 전달받는다.
     public EventIngestionService(
-            IncidentRepository incidentRepository,
+            EventCreationService eventCreationService,
             EventRepository eventRepository
     ) {
-        this.incidentRepository = incidentRepository;
+        this.eventCreationService = eventCreationService;
         this.eventRepository = eventRepository;
     }
-    // 외부에서 이 서비스를 호출할 때 트랜잭션 경계 적용
-    @Transactional
+
+    // 기존 두 인자 호출 방식 유지
     public Receipt receive(String serviceKey, String title) {
-        // DB의 DATETIME(6) 정밀도에 맞춰 UTC 시각을 생성한다.
-        LocalDateTime receivedAt = LocalDateTime.now(ZoneOffset.UTC)
-                .truncatedTo(ChronoUnit.MICROS);
-
-        Incident incident = new Incident(serviceKey, title, receivedAt);
-        // incidentRepository.save() : 사건 저장
-        Incident savedIncident = incidentRepository.save(incident);
-
-        // 먼저 저장한 사건을 참조하도록 이벤트를 연결한다.
-        Event event = new Event(
-                savedIncident,
-                serviceKey,
-                title,
-                receivedAt
-        );
-        // eventRepository.save() : 사건과 연결된 이벤트 저장
-        Event savedEvent = eventRepository.save(event);
-
-        // 엔티티 대신 응답에 필요한 값만 반환한다.
-        // Receipt : 호출자에게 전달할 접수 결과
-        return new Receipt(
-                savedEvent.getId(),
-                savedIncident.getId(),
-                savedIncident.getStatus(),
-                receivedAt.toInstant(ZoneOffset.UTC)
-        );
+        return receive(serviceKey, title, null).receipt();
     }
 
-    
-    // 접수 결과를 전달하는 데이터 객체.
-    // API 계약에 맞춰 식별자, 상태, UTC 접수 시각을 담는다.
-    // record : 결과값을 묶어 전달하기 위한 java 문법
+    public Result receive(
+            String serviceKey,
+            String title,
+            String externalEventId
+    ) {
+        // 외부 번호가 없으면 기존처럼 항상 새로 접수
+        if (externalEventId == null) {
+            Receipt receipt = eventCreationService.create(
+                    serviceKey,
+                    title,
+                    null
+            );
+
+            return new Result(receipt, true);
+        }
+
+        Optional<Event> existing =
+                eventRepository.findByServiceKeyAndExternalEventId(
+                        serviceKey,
+                        externalEventId
+                );
+
+        if (existing.isPresent()) {
+            return reuseExisting(existing.get(), title);
+        }
+
+        try {
+            Receipt receipt = eventCreationService.create(
+                    serviceKey,
+                    title,
+                    externalEventId
+            );
+
+            return new Result(receipt, true);
+        } catch (DataIntegrityViolationException exception) {
+            // 최초 조회 이후 다른 요청이 먼저 저장했을 가능성 확인.
+            // create 호출의 트랜잭션은 이미 롤백된 상태다.
+            Optional<Event> concurrentlyCreated =
+                    eventRepository.findByServiceKeyAndExternalEventId(
+                            serviceKey,
+                            externalEventId
+                    );
+
+            if (concurrentlyCreated.isPresent()) {
+                return reuseExisting(concurrentlyCreated.get(), title);
+            }
+
+            // 기존 접수가 없다면 다른 저장 오류이므로 그대로 전달
+            throw exception;
+        }
+    }
+
+    private Result reuseExisting(Event event, String requestedTitle) {
+        // 같은 번호라도 제목이 다르면 동일 이벤트로 인정하지 않음
+        if (!event.getTitle().equals(requestedTitle)) {
+            throw new EventIdConflictException();
+        }
+
+        Receipt receipt = new Receipt(
+                event.getId(),
+                event.getIncident().getId(),
+                event.getIncident().getStatus(),
+                event.getReceivedAt().toInstant(ZoneOffset.UTC)
+        );
+
+        return new Result(receipt, false);
+    }
+
+    // 외부로 반환할 접수 결과
     public record Receipt(
             Long eventId,
             Long incidentId,
             String status,
             Instant receivedAt
+    ) {
+    }
+
+    // 이번 요청에서 새로 생성했는지를 Controller에 전달
+    public record Result(
+            Receipt receipt,
+            boolean created
     ) {
     }
 }
