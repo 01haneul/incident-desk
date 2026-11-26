@@ -38,3 +38,26 @@
 - [트러블슈팅](docs/troubleshooting.md)
 - [보안 설계 및 검증 상태](docs/security.md)
 - [이벤트 재전송 처리 설계와 검증](docs/idempotency.md)
+
+## 이벤트 접수 인증
+
+POST /api/events 요청에는 X-API-Key 헤더가 필요하다.
+
+실행에 필요한 환경 변수:
+
+| 변수 | 용도 |
+| --- | --- |
+| DB_PASSWORD | incident_app 계정의 MySQL 비밀번호 |
+| INGESTION_API_KEY | 이벤트 접수 인증용 비밀 키 |
+
+두 환경 변수를 설정한 PowerShell에서 서버를 실행한다.
+
+API 키 생성 예시:
+
+```powershell
+$apiKeyBytes = New-Object byte[] 32
+$apiKeyGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$apiKeyGenerator.GetBytes($apiKeyBytes)
+$env:INGESTION_API_KEY = [Convert]::ToBase64String($apiKeyBytes)
+$apiKeyGenerator.Dispose()
+Remove-Variable apiKeyBytes, apiKeyGenerator
