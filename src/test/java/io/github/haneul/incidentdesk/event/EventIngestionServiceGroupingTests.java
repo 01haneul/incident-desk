@@ -23,7 +23,7 @@ import io.github.haneul.incidentdesk.incident.IncidentStatusService;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {
-        "spring.datasource.url=jdbc:mysql://127.0.0.1:3306/incident_desk_test",
+        "spring.datasource.url=jdbc:mysql://127.0.0.1:${INCIDENT_TEST_DB_PORT:3306}/incident_desk_test",
         "spring.datasource.username=incident_app",
         "spring.datasource.password=${DB_PASSWORD}",
         "spring.jpa.hibernate.ddl-auto=validate"

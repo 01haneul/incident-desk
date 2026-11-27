@@ -333,3 +333,10 @@ Add-Content -Path '.\docs\verification.md' -Value $entry -Encoding UTF8
 | 최초 배정과 인계 | 12번 사건의 배정·인계 요청은 각각 200을 반환했다. HTTP 조회와 DB 모두 3번 ASSIGNED(NULL → oncall-01), 4번 TRANSFERRED(oncall-01 → oncall-02) 순서였다. 최종 상태는 OPEN, 담당자는 oncall-02였다. |
 
 전체 자동 테스트 실행 명령은 `.\gradlew.bat test --rerun-tasks --console=plain`이며 결과는 `BUILD SUCCESSFUL`이었다.
+
+## 빈 MySQL 환경에서의 최초 실행 검증 (2026-11-27)
+
+- `a1a105d`를 새 폴더에 복제하고 별도로 초기화한 MySQL 8.0.46 인스턴스(3307)에 SQL 001~007을 적용했다. 개발 DB와 테스트 DB에 각각 테이블 4개가 생성됐다.
+- 새 복제본에서 서버를 8082로 실행했다. 상태 조회는 200, 이벤트 접수는 201, 생성된 사건 상세 조회는 200을 반환했다.
+- 3307 개발 DB에서 이벤트 1번과 사건 1번이 연결된 한 행을 확인했다. 외부 이벤트 번호는 `install-check-001`, 사건 상태는 `OPEN`이었다.
+- 테스트 파일 7개의 DB 포트를 환경 변수로 선택할 수 있게 수정했다. 복제본에 같은 변경을 적용하고 `INCIDENT_TEST_DB_PORT=3307`로 `.\gradlew.bat test --rerun-tasks --console=plain`을 실행해 `BUILD SUCCESSFUL`을 확인했다.
