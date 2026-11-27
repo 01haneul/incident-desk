@@ -3,14 +3,12 @@ package io.github.haneul.incidentdesk.incident;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-// 장애 사건의 저장과 조회를 담당한다.
-// DB가 계산한 active_incident_key로 연결 가능한 OPEN 사건을 찾는다.
 public interface IncidentRepository extends JpaRepository<Incident, Long> {
 
-    // incidentKey가 있는 요청에서 사용할 조회 메서드
     @Query(
             value = """
                     SELECT i.*
@@ -23,5 +21,45 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
     Optional<Incident> findOpenByServiceKeyAndIncidentKey(
             @Param("serviceKey") String serviceKey,
             @Param("incidentKey") String incidentKey
+    );
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Incident i
+            SET i.status = :target
+            WHERE i.id = :incidentId AND i.status = :expected
+            """)
+    int updateStatusIfCurrent(
+            @Param("incidentId") Long incidentId,
+            @Param("expected") String expected,
+            @Param("target") String target
+    );
+
+        @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Incident i SET i.assigneeKey = :assigneeKey
+            WHERE i.id = :incidentId AND i.status = 'OPEN'
+              AND i.assigneeKey IS NULL
+            """)
+
+    int assignIfUnassigned(
+            @Param("incidentId") Long incidentId,
+            @Param("assigneeKey") String assigneeKey
+    );
+
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Incident i
+            SET i.assigneeKey = :nextAssignee
+            WHERE i.id = :incidentId
+              AND i.status = 'OPEN'
+              AND i.assigneeKey = :currentAssignee
+              AND i.assigneeKey <> :nextAssignee
+            """)
+    int transferIfOpenAndAssignedTo(
+            @Param("incidentId") Long incidentId,
+            @Param("currentAssignee") String currentAssignee,
+            @Param("nextAssignee") String nextAssignee
     );
 }

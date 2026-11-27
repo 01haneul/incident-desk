@@ -32,6 +32,9 @@ public class Incident {
     @Column(nullable = false, length = 20)
     private String status;
 
+    @Column(name = "assignee_key", length = 100)
+    private String assigneeKey;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -80,6 +83,10 @@ public class Incident {
 
     public String getStatus() {
         return status;
+    }
+
+    public String getAssigneeKey() {
+        return assigneeKey;
     }
 
     public LocalDateTime getCreatedAt() {

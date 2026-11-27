@@ -287,3 +287,11 @@ DB 변경은 database/003_add_external_event_id.sql로 적용했다.
 - 실행 명령: `.\gradlew.bat test --rerun-tasks`
 - Gradle XML 보고서 합계: 61건 실행, 실패 0건, 오류 0건, 건너뜀 0건
 - 판정: 통과
+## 2026-11-27 — 사건 상태 변경과 담당자 인계 검증
+
+- 개발 DB에서 8번 사건의 최종 상태가 RESOLVED임을 확인했다.
+- 9번 OPEN 사건에 oncall-01을 배정하고, oncall-02로 인계해 HTTP 200을 확인했다.
+- 이전 담당자 oncall-01을 기준으로 한 인계 요청은 HTTP 409로 거절됐다.
+- 사건 확인 요청은 HTTP 200과 ACKNOWLEDGED를 반환했다. 이후 현재 담당자를 정확히 지정한 인계 요청도 HTTP 409로 거절됐다.
+- 최종 개발 DB 상태는 9번 사건, ACKNOWLEDGED, oncall-02였다.
+- 전체 Gradle 테스트 XML 집계: 실행 63, 실패 0, 오류 0, 건너뜀 0.

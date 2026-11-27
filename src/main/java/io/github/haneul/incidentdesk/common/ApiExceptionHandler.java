@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import io.github.haneul.incidentdesk.incident.IncidentStatusConflictException;
 import io.github.haneul.incidentdesk.event.EventIdConflictException;
 import io.github.haneul.incidentdesk.incident.IncidentNotFoundException;
 
@@ -47,6 +48,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
+
+        @ExceptionHandler(IncidentStatusConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleIncidentStatusConflict(
+            IncidentStatusConflictException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                new ApiErrorResponse(
+                        "INCIDENT_STATUS_CONFLICT",
+                        "현재 사건 상태에서는 요청한 작업을 수행할 수 없습니다.",
+                        List.of()
+                )
+        );
+    }
+    
 
     @Override
     protected @Nullable ResponseEntity<Object> handleExceptionInternal(

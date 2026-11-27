@@ -36,6 +36,9 @@ class IncidentControllerWebTests {
     @MockitoBean
     private IncidentQueryService incidentQueryService;
 
+    @MockitoBean
+    private IncidentStatusService statusService;
+
     @Test
     void returnsIncidentWhenFound() throws Exception {
         Instant createdAt = Instant.parse("2026-11-24T07:39:07.814095Z");

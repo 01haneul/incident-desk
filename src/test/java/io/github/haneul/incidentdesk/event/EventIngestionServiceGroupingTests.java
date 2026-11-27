@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import io.github.haneul.incidentdesk.incident.IncidentStatusConflictException;
+import io.github.haneul.incidentdesk.incident.IncidentStatusService;
 
 // 실제 MySQL에서 사건 연결과 재전송 처리의 조합을 검사한다.
 // 테스트 DB에서 고유한 서비스 식별자를 사용하고 해당 데이터만 정리한다.
@@ -43,6 +45,9 @@ class EventIngestionServiceGroupingTests {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private IncidentStatusService incidentStatusService;
 
     private String serviceKey;
 
@@ -196,6 +201,65 @@ class EventIngestionServiceGroupingTests {
         );
 
         assertCounts(1, 2);
+    }
+
+    @Test
+    void preservesFirstAssigneeAfterRetryConflictAndAnotherAlert() {
+        var first = receive(FIRST_TITLE, "evt-001");
+        Long incidentId = first.receipt().incidentId();
+
+        // 최초 배정과 같은 담당자의 재요청은 모두 성공한다.
+        incidentStatusService.assign(incidentId, "oncall-01");
+        incidentStatusService.assign(incidentId, "oncall-01");
+
+        // 다른 담당자가 최초 배정을 덮어쓸 수 없다.
+        assertThrows(
+                IncidentStatusConflictException.class,
+                () -> incidentStatusService.assign(incidentId, "oncall-02")
+        );
+
+        // 배정 후에도 같은 장애의 새 알림은 기존 OPEN 사건으로 들어온다.
+        var second = receive(SECOND_TITLE, "evt-002");
+        assertEquals(incidentId, second.receipt().incidentId());
+        assertFalse(second.incidentCreated());
+
+        var incident = jdbcTemplate.queryForMap(
+                "SELECT status, assignee_key FROM incidents WHERE id = ?",
+                incidentId
+        );
+        assertEquals("OPEN", incident.get("status"));
+        assertEquals("oncall-01", incident.get("assignee_key"));
+        assertCounts(1, 2);
+    }
+
+        @Test
+    void transfersOpenIncidentAndPreservesAssigneeAfterConflicts() {
+        Long incidentId = receive(FIRST_TITLE, "evt-001").receipt().incidentId();
+        incidentStatusService.assign(incidentId, "oncall-01");
+
+        // OPEN 사건은 현재 담당자가 일치하면 인계된다.
+        incidentStatusService.transfer(incidentId, "oncall-01", "oncall-02");
+
+        // 이전 담당자 정보로 보낸 요청은 새 담당자를 덮어쓸 수 없다.
+        assertThrows(
+                IncidentStatusConflictException.class,
+                () -> incidentStatusService.transfer(incidentId, "oncall-01", "oncall-03")
+        );
+
+        assertEquals("ACKNOWLEDGED", incidentStatusService.acknowledge(incidentId));
+
+        // 현재 담당자가 정확해도 이미 확인한 사건은 인계할 수 없다.
+        assertThrows(
+                IncidentStatusConflictException.class,
+                () -> incidentStatusService.transfer(incidentId, "oncall-02", "oncall-03")
+        );
+
+        var incident = jdbcTemplate.queryForMap(
+                "SELECT status, assignee_key FROM incidents WHERE id = ?",
+                incidentId
+        );
+        assertEquals("ACKNOWLEDGED", incident.get("status"));
+        assertEquals("oncall-02", incident.get("assignee_key"));
     }
 
     private EventIngestionService.Result receive(
