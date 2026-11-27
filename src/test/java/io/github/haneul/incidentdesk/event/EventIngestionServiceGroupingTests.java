@@ -294,6 +294,54 @@ class EventIngestionServiceGroupingTests {
         assertEquals(0, transferred.get("attempt_count"));
     }
 
+    @Test
+    void recordsOnlySuccessfulChangesInIncidentHistory() {
+        Long incidentId = receive(FIRST_TITLE, "evt-001").receipt().incidentId();
+
+        incidentStatusService.assign(incidentId, "oncall-01");
+        incidentStatusService.assign(incidentId, "oncall-01"); // 같은 배정 재요청
+
+        incidentStatusService.transfer(incidentId, "oncall-01", "oncall-02");
+        assertThrows(
+                IncidentStatusConflictException.class,
+                () -> incidentStatusService.transfer(incidentId, "oncall-01", "oncall-03")
+        );
+
+        incidentStatusService.acknowledge(incidentId);
+        incidentStatusService.acknowledge(incidentId); // 같은 확인 재요청
+        incidentStatusService.resolve(incidentId);
+        incidentStatusService.resolve(incidentId);     // 같은 해결 재요청
+
+        var history = jdbcTemplate.queryForList("""
+                SELECT action_type, previous_assignee_key, new_assignee_key
+                FROM incident_history
+                WHERE incident_id = ?
+                ORDER BY id
+                """, incidentId);
+
+        assertEquals(4, history.size());
+
+        var assigned = history.get(0);
+        assertEquals("ASSIGNED", assigned.get("action_type"));
+        assertEquals(null, assigned.get("previous_assignee_key"));
+        assertEquals("oncall-01", assigned.get("new_assignee_key"));
+
+        var transferred = history.get(1);
+        assertEquals("TRANSFERRED", transferred.get("action_type"));
+        assertEquals("oncall-01", transferred.get("previous_assignee_key"));
+        assertEquals("oncall-02", transferred.get("new_assignee_key"));
+
+        var acknowledged = history.get(2);
+        assertEquals("ACKNOWLEDGED", acknowledged.get("action_type"));
+        assertEquals(null, acknowledged.get("previous_assignee_key"));
+        assertEquals(null, acknowledged.get("new_assignee_key"));
+
+        var resolved = history.get(3);
+        assertEquals("RESOLVED", resolved.get("action_type"));
+        assertEquals(null, resolved.get("previous_assignee_key"));
+        assertEquals(null, resolved.get("new_assignee_key"));
+    }
+
     private EventIngestionService.Result receive(
             String title,
             String externalEventId

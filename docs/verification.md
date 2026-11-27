@@ -322,3 +322,14 @@ $entry = @"
 
 Add-Content -Path '.\docs\verification.md' -Value $entry -Encoding UTF8
 "기록 완료: 전체 $total / 실패 $failed / 오류 $errors / 건너뜀 $skipped"
+
+## 사건 이력 검증 (2026-11-27)
+
+| 검증 항목 | 실제 HTTP 응답과 개발 DB 결과 |
+|---|---|
+| 중복 확인 요청 | 11번 사건에 확인 요청을 두 번 보냈다. 둘 다 200을 반환했고 ACKNOWLEDGED 이력은 1건만 저장됐다. |
+| 인계 거절 | ACKNOWLEDGED 상태에서 인계 요청이 409 INCIDENT_STATUS_CONFLICT를 반환했다. 담당자는 oncall-02, 이력은 1건으로 유지됐다. |
+| 해결 후 이어보기 | 11번 사건을 해결한 뒤 DB에는 1번 ACKNOWLEDGED, 2번 RESOLVED가 순서대로 남았다. GET /api/incidents/11/history?afterId=1은 200과 2번 이력 한 건을 반환했다. |
+| 최초 배정과 인계 | 12번 사건의 배정·인계 요청은 각각 200을 반환했다. HTTP 조회와 DB 모두 3번 ASSIGNED(NULL → oncall-01), 4번 TRANSFERRED(oncall-01 → oncall-02) 순서였다. 최종 상태는 OPEN, 담당자는 oncall-02였다. |
+
+전체 자동 테스트 실행 명령은 `.\gradlew.bat test --rerun-tasks --console=plain`이며 결과는 `BUILD SUCCESSFUL`이었다.

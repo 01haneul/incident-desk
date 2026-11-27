@@ -6,6 +6,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestBody;
+import java.util.List;
+import org.springframework.web.bind.annotation.RequestParam;
+import jakarta.validation.constraints.PositiveOrZero;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -35,6 +38,15 @@ public class IncidentController {
     ) {
         return incidentQueryService.getDetail(incidentId);
     }
+
+    @GetMapping("/history")
+    public List<IncidentQueryService.HistoryEntry> getHistory(
+            @PathVariable("incidentId") @Positive Long incidentId,
+            @RequestParam(name = "afterId", defaultValue = "0")
+            @PositiveOrZero long afterId
+    ) {
+        return incidentQueryService.getHistory(incidentId, afterId);
+    }  
 
     @PostMapping("/acknowledge")
     public StatusResponse acknowledge(

@@ -77,4 +77,20 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
             @Param("recipientKey") String recipientKey,
             @Param("notificationType") String notificationType
     );
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO incident_history
+                (incident_id, action_type, previous_assignee_key,
+                 new_assignee_key, occurred_at)
+            VALUES
+                (:incidentId, :actionType, :previousAssignee,
+                 :newAssignee, UTC_TIMESTAMP(6))
+            """, nativeQuery = true)
+    int insertHistory(
+            @Param("incidentId") Long incidentId,
+            @Param("actionType") String actionType,
+            @Param("previousAssignee") String previousAssignee,
+            @Param("newAssignee") String newAssignee
+    );
 }

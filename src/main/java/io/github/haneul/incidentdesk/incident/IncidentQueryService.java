@@ -1,28 +1,33 @@
 package io.github.haneul.incidentdesk.incident;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 사건 번호로 DB를 조회하고, 조회 결과를 API 응답 객체로 변환한다.
-// 존재하지 않는 사건은 전용 예외로 구분한다.
 @Service
+@Transactional(readOnly = true)
 public class IncidentQueryService {
 
     private final IncidentRepository incidentRepository;
+    private final JdbcTemplate jdbc;
 
-    public IncidentQueryService(IncidentRepository incidentRepository) {
+    public IncidentQueryService(
+            IncidentRepository incidentRepository,
+            JdbcTemplate jdbc
+    ) {
         this.incidentRepository = incidentRepository;
+        this.jdbc = jdbc;
     }
 
-    @Transactional(readOnly = true)
     public IncidentDetailResponse getDetail(Long incidentId) {
-        // 기본키로 조회하고, 결과가 없으면 사건 없음 예외를 발생시킨다.
         Incident incident = incidentRepository.findById(incidentId)
                 .orElseThrow(IncidentNotFoundException::new);
 
-        // DB의 생성 시각은 UTC로 저장한다는 기존 규칙에 따라 변환한다.
         return new IncidentDetailResponse(
                 incident.getId(),
                 incident.getServiceKey(),
@@ -30,5 +35,40 @@ public class IncidentQueryService {
                 incident.getStatus(),
                 incident.getCreatedAt().toInstant(ZoneOffset.UTC)
         );
+    }
+
+    public List<HistoryEntry> getHistory(Long incidentId, long afterId) {
+        if (!incidentRepository.existsById(incidentId)) {
+            throw new IncidentNotFoundException();
+        }
+
+        return jdbc.query("""
+                SELECT id, action_type, previous_assignee_key,
+                       new_assignee_key, occurred_at
+                FROM incident_history
+                WHERE incident_id = ? AND id > ?
+                ORDER BY id
+                LIMIT 50
+                """,
+                (rs, rowNum) -> new HistoryEntry(
+                        rs.getLong("id"),
+                        rs.getString("action_type"),
+                        rs.getString("previous_assignee_key"),
+                        rs.getString("new_assignee_key"),
+                        rs.getObject("occurred_at", LocalDateTime.class)
+                                .toInstant(ZoneOffset.UTC)
+                ),
+                incidentId,
+                afterId
+        );
+    }
+
+    public record HistoryEntry(
+            long historyId,
+            String actionType,
+            String previousAssigneeKey,
+            String newAssigneeKey,
+            Instant occurredAt
+    ) {
     }
 }

@@ -22,9 +22,12 @@ public class IncidentStatusService {
     }
 
     public void assign(Long incidentId, String assigneeKey) {
-        if (incidentRepository.assignIfUnassigned(incidentId, assigneeKey) == 1) {
+                if (incidentRepository.assignIfUnassigned(incidentId, assigneeKey) == 1) {
             incidentRepository.insertPendingNotification(
                     incidentId, assigneeKey, "ASSIGNED"
+            );
+            incidentRepository.insertHistory(
+                    incidentId, "ASSIGNED", null, assigneeKey
             );
             return;
         }
@@ -47,9 +50,12 @@ public class IncidentStatusService {
                 nextAssignee
         );
 
-        if (updated == 1) {
+               if (updated == 1) {
             incidentRepository.insertPendingNotification(
                     incidentId, nextAssignee, "TRANSFERRED"
+            );
+            incidentRepository.insertHistory(
+                    incidentId, "TRANSFERRED", currentAssignee, nextAssignee
             );
             return;
         }
@@ -63,6 +69,7 @@ public class IncidentStatusService {
 
     private String transition(Long incidentId, String expected, String target) {
         if (incidentRepository.updateStatusIfCurrent(incidentId, expected, target) == 1) {
+            incidentRepository.insertHistory(incidentId, target, null, null);
             return target;
         }
 
