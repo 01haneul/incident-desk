@@ -44,7 +44,6 @@ CREATE TABLE events (
         ON DELETE RESTRICT
         ON UPDATE RESTRICT
 ) ENGINE = InnoDB;
-FH
 SHOW TABLES FROM incident_desk;
 
 -- 장애 사건 테이블의 컬럼과 기본키 확인
