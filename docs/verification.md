@@ -295,3 +295,30 @@ DB 변경은 database/003_add_external_event_id.sql로 적용했다.
 - 사건 확인 요청은 HTTP 200과 ACKNOWLEDGED를 반환했다. 이후 현재 담당자를 정확히 지정한 인계 요청도 HTTP 409로 거절됐다.
 - 최종 개발 DB 상태는 9번 사건, ACKNOWLEDGED, oncall-02였다.
 - 전체 Gradle 테스트 XML 집계: 실행 63, 실패 0, 오류 0, 건너뜀 0.
+
+$reports = Get-ChildItem '.\build\test-results\test\TEST-*.xml' -ErrorAction Stop
+if (-not $reports) { throw '전체 테스트 XML 보고서를 찾지 못했습니다.' }
+
+$total = $failed = $errors = $skipped = 0
+foreach ($file in $reports) {
+    $suite = ([xml](Get-Content -Raw -Encoding UTF8 $file.FullName)).testsuite
+    $total   += [int]$suite.tests
+    $failed  += [int]$suite.failures
+    $errors  += [int]$suite.errors
+    $skipped += [int]$suite.skipped
+}
+
+$entry = @"
+
+## 2026-11-27 — 담당자 알림 전송과 자동 재시도
+
+- 최초 배정과 정상 인계 시 해당 수신자의 PENDING 알림을 한 건 등록했다. 같은 배정 재요청과 거절된 인계 요청은 추가 알림을 만들지 않았다.
+- 테스트 DB에서 인계 알림 등록 실패를 주입한 결과, 기존 담당자와 최초 배정 알림이 보존됐다.
+- 실제 HTTP 검증에서 11번 사건의 배정 알림 2번은 oncall-01에게 전송됐고, 개발 DB에 SENT / 1회로 기록됐다.
+- 같은 사건의 인계 알림 3번은 첫 전송 후 PENDING / 1회였다. 수신 서버가 같은 키 3으로 두 번째 요청에 HTTP 200을 반환했고, 최종 DB 결과는 oncall-02 / TRANSFERRED / SENT / 2회였다.
+- 테스트 DB에서 세 번 연속 실패한 알림은 FAILED / 3회가 됐고 네 번째 전송은 발생하지 않았다.
+- 전체 Gradle 테스트 XML 집계: 실행 $total, 실패 $failed, 오류 $errors, 건너뜀 $skipped.
+"@
+
+Add-Content -Path '.\docs\verification.md' -Value $entry -Encoding UTF8
+"기록 완료: 전체 $total / 실패 $failed / 오류 $errors / 건너뜀 $skipped"

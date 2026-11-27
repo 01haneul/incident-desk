@@ -230,6 +230,17 @@ class EventIngestionServiceGroupingTests {
         assertEquals("OPEN", incident.get("status"));
         assertEquals("oncall-01", incident.get("assignee_key"));
         assertCounts(1, 2);
+
+        var notification = jdbcTemplate.queryForMap("""
+                SELECT notification_type, recipient_key, status, attempt_count
+                FROM incident_notifications
+                WHERE incident_id = ?
+                """, incidentId);
+
+        assertEquals("ASSIGNED", notification.get("notification_type"));
+        assertEquals("oncall-01", notification.get("recipient_key"));
+        assertEquals("PENDING", notification.get("status"));
+        assertEquals(0, notification.get("attempt_count"));       
     }
 
         @Test
@@ -260,6 +271,27 @@ class EventIngestionServiceGroupingTests {
         );
         assertEquals("ACKNOWLEDGED", incident.get("status"));
         assertEquals("oncall-02", incident.get("assignee_key"));
+
+        var notifications = jdbcTemplate.queryForList("""
+                SELECT notification_type, recipient_key, status, attempt_count
+                FROM incident_notifications
+                WHERE incident_id = ?
+                ORDER BY id
+                """, incidentId);
+
+        assertEquals(2, notifications.size());
+
+        var assigned = notifications.get(0);
+        assertEquals("ASSIGNED", assigned.get("notification_type"));
+        assertEquals("oncall-01", assigned.get("recipient_key"));
+        assertEquals("PENDING", assigned.get("status"));
+        assertEquals(0, assigned.get("attempt_count"));
+
+        var transferred = notifications.get(1);
+        assertEquals("TRANSFERRED", transferred.get("notification_type"));
+        assertEquals("oncall-02", transferred.get("recipient_key"));
+        assertEquals("PENDING", transferred.get("status"));
+        assertEquals(0, transferred.get("attempt_count"));
     }
 
     private EventIngestionService.Result receive(

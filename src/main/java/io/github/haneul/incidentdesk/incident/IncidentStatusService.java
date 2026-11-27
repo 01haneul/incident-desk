@@ -23,6 +23,9 @@ public class IncidentStatusService {
 
     public void assign(Long incidentId, String assigneeKey) {
         if (incidentRepository.assignIfUnassigned(incidentId, assigneeKey) == 1) {
+            incidentRepository.insertPendingNotification(
+                    incidentId, assigneeKey, "ASSIGNED"
+            );
             return;
         }
 
@@ -45,6 +48,9 @@ public class IncidentStatusService {
         );
 
         if (updated == 1) {
+            incidentRepository.insertPendingNotification(
+                    incidentId, nextAssignee, "TRANSFERRED"
+            );
             return;
         }
 

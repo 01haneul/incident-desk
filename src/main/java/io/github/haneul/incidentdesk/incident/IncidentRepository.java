@@ -62,4 +62,19 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
             @Param("currentAssignee") String currentAssignee,
             @Param("nextAssignee") String nextAssignee
     );
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO incident_notifications
+                (incident_id, recipient_key, notification_type,
+                 status, attempt_count, next_attempt_at, created_at)
+            VALUES
+                (:incidentId, :recipientKey, :notificationType,
+                 'PENDING', 0, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+            """, nativeQuery = true)
+    int insertPendingNotification(
+            @Param("incidentId") Long incidentId,
+            @Param("recipientKey") String recipientKey,
+            @Param("notificationType") String notificationType
+    );
 }
